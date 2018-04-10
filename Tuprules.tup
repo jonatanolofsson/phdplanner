@@ -1,0 +1,42 @@
+TOP = $(TUP_CWD)
+
+CFLAGS  = -std=c++17
+CFLAGS += -Wall
+CFLAGS += -Werror
+CFLAGS += -Wno-unknown-pragmas
+CFLAGS += -Wfatal-errors
+CFLAGS += -pedantic-errors
+CFLAGS += -Wextra
+CFLAGS += -Wcast-align
+CFLAGS += -g
+#CFLAGS += -pg
+CFLAGS += -O0
+CFLAGS += -I$(TOP)/include
+CFLAGS += -isystem/usr/include/eigen3
+CFLAGS += -fopenmp
+CFLAGS += -fPIC
+#CFLAGS += -DNOPAR
+
+PY_CFLAGS = -shared -I$(TOP)/libs/pybind11/include -I/usr/include/python3.6m -I/usr/include/python3.6m -Wno-nested-anon-types  -Wno-unused-result -Wsign-compare -march=x86-64 -mtune=generic -O2 -pipe -fstack-protector-strong -fno-plt -DNDEBUG -g -fwrapv -O3 -Wall -Wstrict-prototypes
+TEST_CFLAGS  = -I$(TOP)/src
+
+PY_LDFLAGS = -L/usr/lib -lpython3.6m -lpthread -ldl  -lutil -lm  -Xlinker -export-dynamic
+
+
+TEST_LDFLAGS  = -lgtest_main -lgtest
+
+ifdef COVERAGE
+COV_CFLAGS  = -fprofile-arcs
+COV_CFLAGS += -ftest-coverage
+COV_CFLAGS += -fprofile-instr-generate -fcoverage-mapping
+COV_LDFLAGS = -lgcov
+COV_OUT = %B.gcno
+COV_RUNOUT = %B.gcda %B.profraw
+endif
+
+COMPILER = clang++ -Qunused-arguments
+ifdef USE_GCC
+    COMPILER = g++
+endif
+
+.gitignore
