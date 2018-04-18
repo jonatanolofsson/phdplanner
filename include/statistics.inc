@@ -4,6 +4,7 @@
 
 #include <Eigen/Eigenvalues>
 #include "statistics.hpp"
+#include "omp.hpp"
 
 namespace ppl {
     std::random_device rd{};
@@ -16,17 +17,32 @@ namespace ppl {
 
     unsigned rand8() {
         static std::uniform_int_distribution<> idist8(0, 7);
-        return idist8(rgen);
+        unsigned res;
+        CRITICAL(rand8)
+        {
+            res = idist8(rgen);
+        }
+        return res;
     }
 
     int randrel() {
         static std::uniform_int_distribution<> idist(-2, 2);
-        return idist(rgen);
+        int res;
+        CRITICAL(randrel)
+        {
+            res = idist(rgen);
+        }
+        return res;
     }
 
     unsigned rand(int randmax) {
         std::uniform_int_distribution<> idist(0, randmax);
-        return static_cast<unsigned>(idist(rgen));
+        unsigned res;
+        CRITICAL(rand)
+        {
+            res = idist(rgen);
+        }
+        return res;
     }
 }
 
