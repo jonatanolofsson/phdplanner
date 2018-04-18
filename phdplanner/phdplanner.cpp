@@ -22,12 +22,12 @@ PYBIND11_MODULE(phdplanner, m) {
     using ppl::Params;
     py::class_<Params>(m, "Params")
         .def(py::init<>())
-        .def_readwrite("value_factor", &Params::straight_reward)
+        .def_readwrite("value_factor", &Params::value_factor)
         .def_readwrite("straight_reward", &Params::straight_reward)
         .def_readwrite("diagf_reward", &Params::diagf_reward)
         .def_readwrite("side_reward", &Params::side_reward)
         .def_readwrite("max_streak", &Params::max_streak)
-        .def_readwrite("streak_reward", &Params::straight_reward)
+        .def_readwrite("streak_reward", &Params::streak_reward)
         .def_readwrite("score_power", &Params::score_power)
         .def_readwrite("pD", &Params::pD)
         .def_readwrite("memory", &Params::memory);
@@ -35,11 +35,12 @@ PYBIND11_MODULE(phdplanner, m) {
     using ppl::Planner;
     py::class_<Planner>(m, "Planner")
         .def(py::init<typename Planner::PHDs,
+                      Params,
                       typename Planner::Position,
                       unsigned,
                       unsigned,
                       uint8_t>(),
-             "phds"_a, "start"_a, "N"_a = 10000,
+             "phds"_a, "params"_a, "start"_a, "N"_a = 10000,
              "T"_a = 0, "prior_action"_a = 8)
         .def_readwrite("params", &Planner::params)
         .def_readonly("w", &Planner::w)

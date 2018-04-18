@@ -25,44 +25,55 @@ ARGS = None
 def run():
     """Run."""
     nx = 100
-    ny = 100
-    K = 200
-    T = 600
-    N = lambda k: 1000000 if k == 0 else 20000  # noqa
+    ny = 120
+    K = 3
+    T = 60
+    # N = lambda k: 1000000 if k == 0 else 30000  # noqa
+    N = lambda k: 10 if k == 0 else 300  # noqa
     mutation = lambda k: 0.001  # noqa
 
     params = ppl.Params()
-    params.value_factor = 5
+    params.value_factor = 2
     params.straight_reward = 5e-4
     params.diagf_reward = 1e-4
-    params.side_reward = 5e-5
+    params.side_reward = 0 #5e-5
     params.max_streak = 10
     params.streak_reward = params.straight_reward
     params.score_power = 3
     params.pD = 0.99
     pMin = 0.5
-    points = np.empty((2, nx * ny), order='C')
+    unknown = 0.0
+    points = np.empty((2, nx * ny))
     i = 0
     for x in range(nx):
         for y in range(ny):
             points[:, i] = np.array([x, y])
             i = i + 1
 
-    phd = np.zeros((1, nx * ny))
+    phd = np.ones((1, nx * ny)) * unknown
     target_pos = []
-    for _ in range(50):
-        tpos = np.random.rand(2, 1) * 100
+    for _ in range(2):
+        tpos = np.random.rand(2, 1) * 99
+        print("Target at ", tpos.T)
         target_pos.append(tpos)
         phd += (pMin + (1 - pMin) * np.random.rand(1, 1)) \
             * ppl.Gaussian(tpos,
                            np.eye(2) * np.random.rand(1, 1) * 10) \
             .sampled_pos_pdf(points)
+    # target_pos = [np.array([[10], [20]])]
+    # for tpos in target_pos:
+        # phd += ppl.Gaussian(tpos, np.eye(2) * 10).sampled_pos_pdf(points)
 
     phds = [phd.reshape((nx, ny))]
     agents = [
         np.array([[5], [5]], dtype=np.int32),
         np.array([[5], [50]], dtype=np.int32),
     ]
+    if not ARGS.noimages:
+        fig = plt.figure(figsize=(20, 20))
+        plot.phd(phds[0])
+        plt.plot([t[1] for t in target_pos], [t[0] for t in target_pos], 'rx', label='Target centerpoints')
+        fig.savefig(f"{ARGS.filename}_phd.png", bbox_inches='tight')
 
     # evolve_consecutively(phds, agents, params, T, N, mutation, K, target_pos)
     evolve_intertwined(phds, agents, params, T, N, mutation, K, target_pos)
@@ -73,13 +84,16 @@ def evolve_intertwined(phds, agents, params, T, N, mutation, K, target_pos):
     n = N(0)
     agent_paths = {}
     t = time.time()
-    planners = {agent_id: ppl.Planner(phds, start, n, T) for agent_id, start in enumerate(agents)}
+    planners = {}
+    observed_phds = deepcopy(phds)
+    for agent_id, start in enumerate(agents):
+        planner = planners[agent_id] = ppl.Planner(observed_phds, params, start, n, T)
+        observe(observed_phds, [planner.best_path()], params)
     for planner in planners.values():
         planner.params = params
     print(f"Initialized planners in {time.time()-t} s")
     t = time.time()
-    if not ARGS.noimages:
-        fig = plt.figure(figsize=(20, 20))
+    k = 0
     scores = {agent_id: [0] * K for agent_id in planners}
     for agent_id, planner in planners.items():
         scores[agent_id][0] = planner.best_score
@@ -88,15 +102,31 @@ def evolve_intertwined(phds, agents, params, T, N, mutation, K, target_pos):
     best_score = {agent_id: planner.best_score for agent_id, planner in planners.items()}
     best_score["joint"] = sum(score for _, score in best_score.items())
     all_paths = {agent_id: [None] * K for agent_id in planners}
+
+    if not ARGS.noimages:
+        fig = plt.figure(figsize=(20, 20))
+        plot.phd(phds[0])
+        for agent_id, planner in planners.items():
+            path = planner.best_path()
+            all_paths[agent_id][k] = path
+            bweight = planner.w[planner.best_index]
+            for i in range(min(n, floor(100 / len(agents)))):
+                plot.path(planner.get_path(i * max(1, floor(n / floor(100 / len(agents))))),
+                          agent_id, alpha=0.5 * planner.w[i] / bweight)
+        for agent_id in planners:
+            plot.path(all_paths[agent_id][k], 2 + agent_id, label=f"Agent {agent_id}")
+        plt.plot([t[1] for t in target_pos], [t[0] for t in target_pos], 'rx', label='Target centerpoints')
+        plt.legend()
+        fig.savefig(f"{ARGS.filename}_{k:05}.png", bbox_inches='tight')
+
     for k in range(1, K):
         if not ARGS.noimages:
             fig.clf()
             plot.phd(phds[0])
-            plt.plot([t[0] for t in target_pos], [t[1] for t in target_pos], 'rx')
         n = N(k)
         for agent_id, planner in planners.items():
-            observed_phds = observe(phds, [path for agent, path in agent_paths.items()
-                                           if agent != agent_id], params)
+            observe(phds, [path for agent, path in agent_paths.items()
+                           if agent != agent_id], params)
             planner.update_values(observed_phds)
 
             planner.evolve(mutation(k), n)
@@ -111,16 +141,16 @@ def evolve_intertwined(phds, agents, params, T, N, mutation, K, target_pos):
                 bweight = planner.w[planner.best_index]
                 for i in range(floor(100 / len(agents))):
                     plot.path(planner.get_path(i * floor(n / floor(100 / len(agents)))),
-                              agent_id, alpha=planner.w[i] / bweight)
-        if not ARGS.noimages:
-            for agent_id in planners:
-                plot.path(all_paths[agent_id][k], 2 + agent_id, label=f"Agent {agent_id}")
-            plt.legend()
+                              agent_id, alpha=0.5 * planner.w[i] / bweight)
 
         if scores["joint"][k] > best_score["joint"]:
             best_score["joint"] = planner.best_score
 
         if not ARGS.noimages:
+            for agent_id in planners:
+                plot.path(all_paths[agent_id][k], 2 + agent_id, label=f"Agent {agent_id}")
+            plt.plot([t[0] for t in target_pos], [t[1] for t in target_pos], 'rx', label='Target centerpoints')
+            plt.legend()
             fig.savefig(f"{ARGS.filename}_{k:05}.png", bbox_inches='tight')
 
         print(f"Finished step {k}")
@@ -145,9 +175,10 @@ def evolve_consecutively(phds, agents, params, T, N, mutation, K, target_pos):
     for agent_id, start in enumerate(agents):
         t = time.time()
         n = N(0)
-        observed_phds = observe(phds, [path for agent, path in agent_paths.items()
-                                       if agent != agent_id], params)
-        planner = ppl.Planner(observed_phds, start, n, T)
+        observed_phds = deepcopy(phds)
+        observe(observed_phds, [path for agent, path in agent_paths.items()
+                                if agent != agent_id], params)
+        planner = ppl.Planner(observed_phds, params, start, n, T)
         print(f"Initialized planner in {time.time()-t} s")
         planner.params = params
         t = time.time()
@@ -189,11 +220,9 @@ def evolve_consecutively(phds, agents, params, T, N, mutation, K, target_pos):
 
 def observe(phds, paths, params):
     """Reduce the phds based on observations."""
-    observed_phds = deepcopy(phds)
     for path in paths:
         for t, position in enumerate(path):
-            observed_phds[0 if len(phds) == 1 else t][position[0], position[1]] *= params.pD
-    return observed_phds
+            phds[0 if len(phds) == 1 else t][position[0], position[1]] *= params.pD
 
 
 def parse_args(*argv):

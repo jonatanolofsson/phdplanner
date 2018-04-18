@@ -27,7 +27,8 @@ TEST(PHDPlannerTests, ConstructPlanner) {
     target1.sampled_pos_pdf(points, res);
     Planner::PHDs phds{phd};
     Planner::Position start; start << 5, 5;
-    Planner plan(phds, start);
+    Planner::Params params;
+    Planner plan(phds, params, start);
     plan.evolve();
     EXPECT_EQ(plan.population.size(), 1e4);
     Planner::Path path;
@@ -54,7 +55,8 @@ TEST(PHDPlannerTests, Evolve) {
     target1.sampled_pos_pdf(points, res);
     Planner::PHDs phds(20, phd);
     Planner::Position start; start << 5, 5;
-    Planner plan(phds, start);
+    Planner::Params params;
+    Planner plan(phds, params, start);
     Planner::Path path;
     for (unsigned k = 0; k < 200; ++k) {
         plan.evolve();

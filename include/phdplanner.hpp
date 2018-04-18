@@ -14,11 +14,11 @@
 
 namespace ppl {
     const Eigen::Matrix<int, 2, 8> moves = (Eigen::Matrix<int, 2, 8>() <<
-        1, 1, 0, -1, -1, -1,  0,  1,
-        0, 1, 1,  1,  0, -1, -1, -1).finished();
+        0, 1, 1,  1,  0, -1, -1, -1,
+        1, 1, 0, -1, -1, -1,  0,  1).finished();
 
 struct Planner {
-    using PHD = Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic>;
+    using PHD = Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
     using PHDs = std::vector<PHD, Eigen::aligned_allocator<PHD>>;
     using Position = Eigen::Vector2i;
 
@@ -27,6 +27,7 @@ struct Planner {
     using Path = Eigen::Array<int, 2, Eigen::Dynamic>;
     using Population = std::vector<Actions>;
     using Weights = Eigen::Array<double, 1, Eigen::Dynamic>;
+    using Params = Params;
 
     PHDs values;
     double eta;
@@ -40,17 +41,20 @@ struct Planner {
     double best_score;
     Params params;
 
-    Planner(const PHDs& values_, Position start_, unsigned N = 1e4, unsigned T_ = 0, Action prior_action_ = 8)
+    Planner(const PHDs& values_, Params params_, Position start_, unsigned N = 1e4, unsigned T_ = 0, Action prior_action_ = 8)
     : values(values_),
       T(T_ == 0 ? values_.size() : T_),
       start(start_),
       prior_action(prior_action_),
-      maxpos(values[0].cols() - 1, values[0].rows() - 1),
-      population(N)
+      maxpos(values[0].rows() - 1, values[0].cols() - 1),
+      population(N),
+      params(params_)
     {
+        std::cout << "Values shape: " << values[0].rows() << ", " << values[0].cols() << std::endl;
+        //std::cout << "c 200, 2: " << values[0](200, 2) << std::endl;
         PARFOR
         for (unsigned i = 0; i < N; ++i) {
-            generate_path2(population[i], prior_action);
+            generate_path3(population[i]);
         }
         calculate_score();
     }
@@ -78,46 +82,51 @@ struct Planner {
         }
     }
 
+    bool is_valid(const Action action, const Action prev_action) {
+        int d = static_cast<int>(action) - static_cast<int>(prev_action);
+        return ((d % 8 + 8) % 8) < 3;
+    }
+
     unsigned follow_line(Position& pos, const Position& new_pos, unsigned T, Actions::iterator actions) {
         unsigned t = 0;
         Action action;
         Position delta = new_pos - pos;
-        if (delta.x() != 0) {
-            double deltaerr = std::abs(static_cast<double>(delta.y()) / static_cast<double>(delta.x()));
+        if (delta.y() != 0) {
+            double deltaerr = std::abs(static_cast<double>(delta.x()) / static_cast<double>(delta.y()));
             double error = 0;
-            while ((delta.x() != 0 && delta.y() != 0) && t < T) {
-                action = (delta.x() > 0
-                            ? (delta.y() > 0 ? 1 : (delta.y() == 0 ? 0 : 7))            // Right
-                            : (delta.x() == 0
-                                ? (delta.y() > 0 ? 2 : 6)                               // Up/down
-                                : (delta.y() > 0 ? 3 : (delta.y() == 0 ? 4 : 5))));     // Left
+            while ((delta.y() != 0 && delta.x() != 0) && t < T) {
+                action = (delta.y() > 0
+                            ? (delta.x() > 0 ? 1 : (delta.y() == 0 ? 0 : 7))            // Right
+                            : (delta.y() == 0
+                                ? (delta.x() > 0 ? 2 : 6)                               // Up/down
+                                : (delta.x() > 0 ? 3 : (delta.x() == 0 ? 4 : 5))));     // Left
                 if (action != 0 && action != 4) { error -= 1.0; }
-                while (error < 0.5 && delta.x() != 0 && t < T) {
+                while (error < 0.5 && delta.y() != 0 && t < T) {
                     pos += moves.col(action);
                     delta -= moves.col(action);
                     *(actions++) = action;
                     ++t;
                     error += deltaerr;
-                    action = (delta.x() > 0 ? 0 : 4);
+                    action = (delta.y() > 0 ? 0 : 4);
                 }
-                action = (delta.x() > 0
-                            ? (delta.y() > 0 ? 1 : (delta.y() == 0 ? 0 : 7))            // Right
-                            : (delta.x() == 0
-                                ? (delta.y() > 0 ? 2 : 6)                               // Up/down
-                                : (delta.y() > 0 ? 3 : (delta.y() == 0 ? 4 : 5))));     // Left
+                action = (delta.y() > 0
+                            ? (delta.x() > 0 ? 1 : (delta.x() == 0 ? 0 : 7))            // Right
+                            : (delta.y() == 0
+                                ? (delta.x() > 0 ? 2 : 6)                               // Up/down
+                                : (delta.x() > 0 ? 3 : (delta.x() == 0 ? 4 : 5))));     // Left
                 if (action != 2 && action != 6) { error += deltaerr; }
-                while (error > 0.5 && delta.y() != 0 && t < T) {
+                while (error > 0.5 && delta.x() != 0 && t < T) {
                     pos += moves.col(action);
                     delta -= moves.col(action);
                     *(actions++) = action;
                     ++t;
                     error -= 1.0;
-                    action = (delta.y() > 0 ? 2 : 6);
+                    action = (delta.x() > 0 ? 2 : 6);
                 }
             }
         } else {
-            action = delta.y() > 0 ? 2 : 6;
-            while (delta.y() != 0 && t < T) {
+            action = delta.x() > 0 ? 2 : 6;
+            while (delta.x() != 0 && t < T) {
                 pos += moves.col(action);
                 delta -= moves.col(action);
                 *(actions++) = action;
@@ -127,18 +136,33 @@ struct Planner {
         return t;
     }
 
-    void generate_path2(Actions& actions, Action prior_action = 8) {
+    void generate_path2(Actions& actions) {
         Position pos = start;
         Position new_pos;
         actions.resize(T);
-        actions[0] = random_action(prior_action);
-        pos += moves.col(actions[0]);
-        unsigned t = 1;
+        unsigned t = 0;
         while (t < T) {
             new_pos << rand(maxpos(0)), rand(maxpos(1));
             t += follow_line(pos, new_pos, T - t, std::begin(actions) + t);
         }
-        validify(actions);
+    }
+
+    void generate_path3(Actions& actions) {
+        Position pos = start;
+        Position new_pos;
+        actions.resize(T);
+        unsigned t = 0;
+        while (t < T) {
+            auto& vals = values[values.size() == 1 ? 0 : t];
+            double value = vals.sum() * urand();
+            unsigned i = 0;
+            double cumsum = 0;
+            while (cumsum < value) { cumsum += vals(i++); }
+            --i;
+
+            new_pos << i / vals.cols(), i % vals.cols();
+            t += follow_line(pos, new_pos, T - t, std::begin(actions) + t);
+        }
     }
 
     void normalize() {
@@ -213,7 +237,7 @@ struct Planner {
                 int visits = std::count_if(std::begin(visited) + std::max(0, static_cast<int>(t) - params.memory),
                                            std::begin(visited) + t,
                                            [pos](Position& p) { return p == pos; });
-                w[i] += revisit_factor[visits] * values[values.size() == 1 ? 0 : t](pos.y(), pos.x());
+                w[i] += revisit_factor[visits] * values[values.size() == 1 ? 0 : t](pos.x(), pos.y());
                 if (t > 0) {
                          if (action == actions[t-1])                { w[i] += params.straight_reward; }
                     else if (action == relaction(actions[t-1], 1))  { w[i] += params.diagf_reward; }
@@ -243,6 +267,9 @@ struct Planner {
     }
 
     static Action random_action(const Action prev_action) {
+        if (prev_action == 8)  {
+            return random_action();
+        }
         return relaction(prev_action, randrel());
 
     }
