@@ -50,7 +50,7 @@ struct Planner {
       population(N),
       params(params_)
     {
-        std::cout << "Values shape: " << values[0].rows() << ", " << values[0].cols() << std::endl;
+        //std::cout << "Values shape: " << values[0].rows() << ", " << values[0].cols() << std::endl;
         //std::cout << "c 200, 2: " << values[0](200, 2) << std::endl;
         PARFOR
         for (unsigned i = 0; i < N; ++i) {
@@ -161,6 +161,7 @@ struct Planner {
             --i;
 
             new_pos << i / vals.cols(), i % vals.cols();
+            //std::cout << "value: " << value << " : go from " << pos.format(eigenformat) << " to " << new_pos.format(eigenformat) << " (" << i << ") | " << values[0](new_pos.x(), new_pos.y()) << " / " << vals(i) << std::endl;
             t += follow_line(pos, new_pos, T - t, std::begin(actions) + t);
         }
     }
@@ -221,6 +222,13 @@ struct Planner {
         std::vector<double> revisit_factor(T);
         PARFOR
         for (unsigned t = 0; t < T; ++t) { revisit_factor[t] = params.value_factor * params.pD * std::pow(1 - params.pD, t); }
+
+        //std::cout << "Calculate score: " << std::endl;
+        //std::cout << "\tstraight: " << params.straight_reward << std::endl;
+        //std::cout << "\tdiagf: " << params.diagf_reward << std::endl;
+        //std::cout << "\tside: " << params.side_reward << std::endl;
+        //std::cout << "\tstreak: " << params.streak_reward << std::endl;
+        //std::cout << "\trevisits: " << revisit_factor[0] << ", " << revisit_factor[1] << ", " << revisit_factor[2] << std::endl;
 
         PARFOR
         for (unsigned i = 0; i < N; ++i) {
