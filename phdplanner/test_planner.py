@@ -26,8 +26,8 @@ def run():
     """Run."""
     nx = 100
     ny = 120
-    K = 3
-    T = 60
+    K = 1
+    T = 600
     # N = lambda k: 1000000 if k == 0 else 30000  # noqa
     N = lambda k: 10 if k == 0 else 300  # noqa
     mutation = lambda k: 0.001  # noqa
@@ -42,7 +42,7 @@ def run():
     params.score_power = 3
     params.pD = 0.99
     pMin = 0.5
-    unknown = 0.0
+    unknown = 0.01
     points = np.empty((2, nx * ny))
     i = 0
     for x in range(nx):
@@ -52,7 +52,7 @@ def run():
 
     phd = np.ones((1, nx * ny)) * unknown
     target_pos = []
-    for _ in range(2):
+    for _ in range(10):
         tpos = np.random.rand(2, 1) * 99
         print("Target at ", tpos.T)
         target_pos.append(tpos)
@@ -60,6 +60,7 @@ def run():
             * ppl.Gaussian(tpos,
                            np.eye(2) * np.random.rand(1, 1) * 10) \
             .sampled_pos_pdf(points)
+    print("Max: ", phd.max())
     # target_pos = [np.array([[10], [20]])]
     # for tpos in target_pos:
         # phd += ppl.Gaussian(tpos, np.eye(2) * 10).sampled_pos_pdf(points)
@@ -112,7 +113,7 @@ def evolve_intertwined(phds, agents, params, T, N, mutation, K, target_pos):
             bweight = planner.w[planner.best_index]
             for i in range(min(n, floor(100 / len(agents)))):
                 plot.path(planner.get_path(i * max(1, floor(n / floor(100 / len(agents))))),
-                          agent_id, alpha=0.5 * planner.w[i] / bweight)
+                          agent_id, alpha=0.3 * planner.w[i] / bweight)
         for agent_id in planners:
             plot.path(all_paths[agent_id][k], 2 + agent_id, label=f"Agent {agent_id}")
         plt.plot([t[1] for t in target_pos], [t[0] for t in target_pos], 'rx', label='Target centerpoints')

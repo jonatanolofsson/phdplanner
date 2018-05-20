@@ -152,16 +152,21 @@ struct Planner {
         Position new_pos;
         actions.resize(T);
         unsigned t = 0;
+        PHD* vals = &values[0];
+        double vsum = vals->sum();
         while (t < T) {
-            auto& vals = values[values.size() == 1 ? 0 : t];
-            double value = vals.sum() * urand();
+            if (values.size() > 1) {
+                vals = &values[t];
+                vsum = vals->sum();
+            }
+            double value = vsum * urand();
             unsigned i = 0;
             double cumsum = 0;
-            while (cumsum < value) { cumsum += vals(i++); }
+            while (cumsum < value) { cumsum += (*vals)(i++); }
             --i;
 
-            new_pos << i / vals.cols(), i % vals.cols();
-            //std::cout << "value: " << value << " : go from " << pos.format(eigenformat) << " to " << new_pos.format(eigenformat) << " (" << i << ") | " << values[0](new_pos.x(), new_pos.y()) << " / " << vals(i) << std::endl;
+            new_pos << i / vals->cols(), i % vals->cols();
+            //std::cout << "value: " << value << " : go from " << pos.format(eigenformat) << " to " << new_pos.format(eigenformat) << " (" << i << ") | " << values[0](new_pos.x(), new_pos.y()) << " / " << (*vals)(i) << std::endl;
             t += follow_line(pos, new_pos, T - t, std::begin(actions) + t);
         }
     }

@@ -32,7 +32,7 @@ def phd(phd_, *args, points=None, **kwargs):
     es = np.arange(phd_.shape[1]) if points is None else points[1]
     extent = (es.min(), es.max(), ns.min(), ns.max())
     img = ax.imshow(phd_, origin='lower', extent=extent,
-                    vmin=0, vmax=max(1, phd_.max()),
+                    vmin=0, vmax=phd_.max(),
                     *args, **kwargs)
     plt.colorbar(img)
     # X, Y = np.meshgrid(xs, ys, indexing='ij')
