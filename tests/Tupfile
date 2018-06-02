@@ -2,6 +2,7 @@ include_rules
 
 !testcc = |> $(COMPILER) $(CFLAGS) $(COV_CFLAGS) $(TEST_CFLAGS) %f -o %o $(LDFLAGS) $(TEST_LDFLAGS) |> %B | $(COV_OUT)
 !testrun = |> LLVM_PROFILE_FILE=%f.profraw ./%f > %o |> %f.output | $(COV_RUNOUT)
+:foreach *.png.py *.tex.py *.pdf.py *.eps.py | $(TOP)/<libs> |> !python |> %B
 
 :foreach *.cpp |> !testcc |> {tests}
 :foreach {tests} |> !testrun |>

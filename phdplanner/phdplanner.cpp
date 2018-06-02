@@ -10,7 +10,6 @@
 #include <queue>
 #include <string>
 #include "phdplanner.hpp"
-#include "gaussian.hpp"
 
 namespace py = pybind11;
 using namespace py::literals;
@@ -59,16 +58,4 @@ PYBIND11_MODULE(phdplanner, m) {
             planner.best_path(path);
             return path;
         });
-
-    using Gaussian = ppl::Gaussian_<2>;
-    py::class_<Gaussian>(m, "Gaussian")
-        .def(py::init<Gaussian::State,
-                      Gaussian::Covariance,
-                      double>(), "mean"_a, "cov"_a, "w"_a = 1.0)
-        .def_readwrite("w", &Gaussian::w)
-        .def_readwrite("m", &Gaussian::x)
-        .def_readwrite("P", &Gaussian::P)
-        .def("sampled_pos_pdf", &Gaussian::sampled_pos_pdf_h,
-             "points"_a, "scale"_a = 1.0)
-        .def("__repr__", &ppl::print<Gaussian>);
 }

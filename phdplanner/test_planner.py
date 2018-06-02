@@ -9,6 +9,7 @@ import sys
 import time
 from math import floor
 import phdplanner as ppl
+import lmb
 import matplotlib.pyplot as plt
 import numpy as np
 import plot
@@ -50,20 +51,20 @@ def run():
             points[:, i] = np.array([x, y])
             i = i + 1
 
-    phd = np.ones((1, nx * ny)) * unknown
+    phd = np.ones((nx, ny)) * unknown
     target_pos = []
     for _ in range(10):
         tpos = np.random.rand(2, 1) * 99
         print("Target at ", tpos.T)
         target_pos.append(tpos)
         phd += (pMin + (1 - pMin) * np.random.rand(1, 1)) \
-            * ppl.Gaussian(tpos,
+            * lmb.Gaussian(tpos,
                            np.eye(2) * np.random.rand(1, 1) * 10) \
             .sampled_pos_pdf(points)
     print("Max: ", phd.max())
     # target_pos = [np.array([[10], [20]])]
     # for tpos in target_pos:
-        # phd += ppl.Gaussian(tpos, np.eye(2) * 10).sampled_pos_pdf(points)
+        # phd += lmb.Gaussian(tpos, np.eye(2) * 10).sampled_pos_pdf(points)
 
     phds = [phd.reshape((nx, ny))]
     agents = [

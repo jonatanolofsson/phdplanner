@@ -25,18 +25,10 @@ def path3d(path_, phd_, c=0, *args, **kwargs):
     plt.gca().plot(path_[0, :], path_[1, :], zpath, color=CMAP(c), *args, **kwargs)
 
 
-def phd(phd_, *args, points=None, **kwargs):
+def phd(phd_, *args, **kwargs):
     """Plot."""
-    ax = plt.gca()
-    ns = np.arange(phd_.shape[0]) if points is None else points[0]
-    es = np.arange(phd_.shape[1]) if points is None else points[1]
-    extent = (es.min(), es.max(), ns.min(), ns.max())
-    img = ax.imshow(phd_, origin='lower', extent=extent,
-                    vmin=0, vmax=phd_.max(),
-                    *args, **kwargs)
+    img = plt.gca().imshow(phd_, *args, origin='lower', vmin=0, vmax=phd_.max(), **kwargs)
     plt.colorbar(img)
-    # X, Y = np.meshgrid(xs, ys, indexing='ij')
-    # ax.contour(X, Y, phd_)
 
 
 def path(path_, c=0, *args, **kwargs):
