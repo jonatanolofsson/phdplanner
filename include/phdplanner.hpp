@@ -1,6 +1,7 @@
 // Copyright 2018 Jonatan Olofsson
 #pragma once
 #include <algorithm>
+#include <cassert>
 #include <cstdint>
 #include <numeric>
 #include <utility>
@@ -13,13 +14,21 @@
 #include "params.hpp"
 
 namespace ppl {
+    static const unsigned E = 0;
+    static const unsigned NE = 1;
+    static const unsigned N = 2;
+    static const unsigned NW = 3;
+    static const unsigned W = 4;
+    static const unsigned SW = 5;
+    static const unsigned S = 6;
+    static const unsigned SE = 7;
+    // E, NE, N, NW, W, SW, S, SE
     const Eigen::Matrix<int, 2, 8> moves = (Eigen::Matrix<int, 2, 8>() <<
         0, 1, 1,  1,  0, -1, -1, -1,
         1, 1, 0, -1, -1, -1,  0,  1).finished();
 
 struct Planner {
     using PHD = Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
-    using PHDs = std::vector<PHD, Eigen::aligned_allocator<PHD>>;
     using Position = Eigen::Vector2i;
 
     using Action = uint8_t;
@@ -29,7 +38,7 @@ struct Planner {
     using Weights = Eigen::Array<double, 1, Eigen::Dynamic>;
     using Params = Params;
 
-    PHDs values;
+    PHD values;
     double eta;
     Weights w;
     std::size_t T;
@@ -41,30 +50,36 @@ struct Planner {
     double best_score;
     Params params;
 
-    Planner(const PHDs& values_, Params params_, Position start_, unsigned N = 1e4, unsigned T_ = 0, Action prior_action_ = 8)
+    Planner(const PHD& values_, Params params_, Position start_, unsigned T_, unsigned N = 1e1, Action prior_action_ = 8)
     : values(values_),
-      T(T_ == 0 ? values_.size() : T_),
+      T(T_),
       start(start_),
       prior_action(prior_action_),
-      maxpos(values[0].rows() - 1, values[0].cols() - 1),
+      maxpos(values.rows() - 1, values.cols() - 1),
       population(N),
       params(params_)
     {
-        //std::cout << "Values shape: " << values[0].rows() << ", " << values[0].cols() << std::endl;
-        //std::cout << "c 200, 2: " << values[0](200, 2) << std::endl;
-        PARFOR
-        for (unsigned i = 0; i < N; ++i) {
-            generate_path3(population[i]);
-        }
+        //std::cout << "Values shape: " << values.rows() << ", " << values.cols() << std::endl;
+        //std::cout << "c 200, 2: " << values(200, 2) << std::endl;
+        switch (params.pathgen) {
+            case 1:
+                PARFOR for (unsigned i = 0; i < N; ++i) { generate_path1(population[i]); } break;
+            case 2:
+                PARFOR for (unsigned i = 0; i < N; ++i) { generate_path2(population[i]); } break;
+            case 3:
+                PARFOR for (unsigned i = 0; i < N; ++i) { generate_path3(population[i]); } break;
+            case 4:
+                PARFOR for (unsigned i = 0; i < N; ++i) { generate_path4(population[i]); } break;
+        };
         calculate_score();
     }
 
-    void update_values(const PHDs& new_values) {
+    void update_values(const PHD& new_values) {
         values = new_values;
         calculate_score();
     }
 
-    void generate_path(Actions& actions, Action prior_action = 8) {
+    void generate_path1(Actions& actions) {
         Action action;
         Action prev_action = (prior_action > 7 ? random_action() : prior_action);
         Position pos = start;
@@ -91,37 +106,54 @@ struct Planner {
         unsigned t = 0;
         Action action;
         Position delta = new_pos - pos;
+        //std::cout << "Follow from " << pos.transpose() << " to " << new_pos.transpose() << std::endl;
         if (delta.y() != 0) {
             double deltaerr = std::abs(static_cast<double>(delta.x()) / static_cast<double>(delta.y()));
             double error = 0;
-            while ((delta.y() != 0 && delta.x() != 0) && t < T) {
+            while (!(delta.x() == 0 && delta.y() == 0) && t < T) {
                 action = (delta.y() > 0
-                            ? (delta.x() > 0 ? 1 : (delta.y() == 0 ? 0 : 7))            // Right
+                            ? (delta.x() > 0 ? NE : (delta.x() < 0 ? SE : E))            // Right
                             : (delta.y() == 0
-                                ? (delta.x() > 0 ? 2 : 6)                               // Up/down
-                                : (delta.x() > 0 ? 3 : (delta.x() == 0 ? 4 : 5))));     // Left
+                                ? (delta.x() > 0 ? N : S)                               // Up/down
+                                : (delta.x() > 0 ? NW : (delta.x() < 0 ? SW : W))));     // Left
                 if (action != 0 && action != 4) { error -= 1.0; }
                 while (error < 0.5 && delta.y() != 0 && t < T) {
+                    //std::cout << "\t\t\t\t\t\t\t\tDelta: " << delta.transpose() << ", la: " << static_cast<int>(action) << std::endl;
                     pos += moves.col(action);
                     delta -= moves.col(action);
+                    //std::cout << "Pos0: " << pos.transpose() << ", Delta: " << delta.transpose() << ", la: " << static_cast<int>(action) << std::endl;
                     *(actions++) = action;
                     ++t;
                     error += deltaerr;
                     action = (delta.y() > 0 ? 0 : 4);
                 }
                 action = (delta.y() > 0
-                            ? (delta.x() > 0 ? 1 : (delta.x() == 0 ? 0 : 7))            // Right
+                            ? (delta.x() > 0 ? NE : (delta.x() < 0 ? SE : E))            // Right
                             : (delta.y() == 0
-                                ? (delta.x() > 0 ? 2 : 6)                               // Up/down
-                                : (delta.x() > 0 ? 3 : (delta.x() == 0 ? 4 : 5))));     // Left
+                                ? (delta.x() > 0 ? N : S)                               // Up/down
+                                : (delta.x() > 0 ? NW : (delta.x() < 0 ? SW : W))));     // Left
                 if (action != 2 && action != 6) { error += deltaerr; }
                 while (error > 0.5 && delta.x() != 0 && t < T) {
+                    //std::cout << "\t\t\t\t\t\t\t\tDelta: " << delta.transpose() << ", la: " << static_cast<int>(action) << std::endl;
                     pos += moves.col(action);
                     delta -= moves.col(action);
+                    //std::cout << "Pos1: " << pos.transpose() << ", Delta: " << delta.transpose() << ", la: " << static_cast<int>(action) << std::endl;
                     *(actions++) = action;
                     ++t;
                     error -= 1.0;
                     action = (delta.x() > 0 ? 2 : 6);
+                }
+
+                if (delta.y() == 0) {
+                    action = delta.x() > 0 ? 2 : 6;
+                    while (delta.x() != 0 && t < T) {
+                        //std::cout << "\t\t\t\t\t\t\t\tDelta: " << delta.transpose() << ", la: " << static_cast<int>(action) << std::endl;
+                        pos += moves.col(action);
+                        delta -= moves.col(action);
+                        //std::cout << "Pos2: " << pos.transpose() << ", Delta: " << delta.transpose() << ", la: " << static_cast<int>(action) << std::endl;
+                        *(actions++) = action;
+                        ++t;
+                    }
                 }
             }
         } else {
@@ -149,25 +181,53 @@ struct Planner {
 
     void generate_path3(Actions& actions) {
         Position pos = start;
-        Position new_pos;
+        Position new_pos, old_pos;
         actions.resize(T);
         unsigned t = 0;
-        PHD* vals = &values[0];
-        double vsum = vals->sum();
+        auto vals = values;
         while (t < T) {
-            if (values.size() > 1) {
-                vals = &values[t];
-                vsum = vals->sum();
-            }
-            double value = vsum * urand();
+            double value = vals.sum() * urand();
             unsigned i = 0;
             double cumsum = 0;
-            while (cumsum < value) { cumsum += (*vals)(i++); }
+            while (cumsum < value) { cumsum += vals(i++); }
             --i;
 
-            new_pos << i / vals->cols(), i % vals->cols();
-            //std::cout << "value: " << value << " : go from " << pos.format(eigenformat) << " to " << new_pos.format(eigenformat) << " (" << i << ") | " << values[0](new_pos.x(), new_pos.y()) << " / " << (*vals)(i) << std::endl;
-            t += follow_line(pos, new_pos, T - t, std::begin(actions) + t);
+            old_pos = pos;
+            new_pos << i / vals.cols(), i % vals.cols();
+            //std::cout << "value " << t << ": " << value << " : go from " << pos.format(eigenformat) << " to " << new_pos.format(eigenformat) << " (" << i << ") | " << values(new_pos.x(), new_pos.y()) << " / " << vals(i) << std::endl;
+            auto a = follow_line(pos, new_pos, T - t, std::begin(actions) + t);
+            observe(vals, old_pos, std::begin(actions) + t, std::begin(actions) + t + a);
+            t += a;
+        }
+    }
+
+    void generate_path4(Actions& actions) {
+        Position pos = start;
+        Position new_pos, old_pos;
+        actions.resize(T);
+        unsigned t = 0;
+        auto vals = values;
+        while (t < T) {
+            unsigned x, y;
+            vals.maxCoeff(&x, &y);
+
+            old_pos = pos;
+            new_pos << x, y;
+            auto a = follow_line(pos, new_pos, T - t, std::begin(actions) + t);
+            //std::cout << "value " << t << "/" << T << " :: " << a << " : " << " : go from " << pos.format(eigenformat) << " to " << new_pos.format(eigenformat) << " | " << values(new_pos.x(), new_pos.y()) << std::endl;
+            observe(vals, old_pos, std::begin(actions) + t, std::begin(actions) + t + a);
+            t += a;
+        }
+    }
+
+    void observe(PHD& vals, Position pos, Actions::iterator start, Actions::iterator end) {
+        for(auto action = start; action != end; ++action) {
+            pos += moves.col(*action);
+            if (pos.x() < 0 || pos.y() < 0 || pos.x() > maxpos.x() || pos.y() > maxpos.y()) {
+                std::cout << "Invalid pos (observe): (" << pos.x() << ", " << pos.y() << ") > (" << maxpos.x() << ", " << maxpos.y() << ")"<< std::endl;
+                exit(1);
+            }
+            vals(pos.x(), pos.y()) *= 1 - params.pD;
         }
     }
 
@@ -225,8 +285,9 @@ struct Planner {
         unsigned N = population.size();
         w.resize(1, N);
         std::vector<double> revisit_factor(T);
-        PARFOR
-        for (unsigned t = 0; t < T; ++t) { revisit_factor[t] = params.value_factor * params.pD * std::pow(1 - params.pD, t); }
+        revisit_factor[0] = 0;
+        for (unsigned t = 1; t < T; ++t) { revisit_factor[t] = (1 - revisit_factor[t-1]) * params.pD; }
+        for (unsigned t = 1; t < T; ++t) { revisit_factor[t] *= params.value_factor; }
 
         //std::cout << "Calculate score: " << std::endl;
         //std::cout << "\tstraight: " << params.straight_reward << std::endl;
@@ -250,7 +311,11 @@ struct Planner {
                 int visits = std::count_if(std::begin(visited) + std::max(0, static_cast<int>(t) - params.memory),
                                            std::begin(visited) + t,
                                            [pos](Position& p) { return p == pos; });
-                w[i] += revisit_factor[visits] * values[values.size() == 1 ? 0 : t](pos.x(), pos.y());
+                if (pos.x() < 0 || pos.y() < 0 || pos.x() > maxpos.x() || pos.y() > maxpos.y()) {
+                    std::cout << "Invalid pos: (" << pos.x() << ", " << pos.y() << ") > (" << maxpos.x() << ", " << maxpos.y() << ")"<< std::endl;
+                    exit(1);
+                }
+                w[i] += revisit_factor[visits] * values(pos.x(), pos.y());
                 if (t > 0) {
                          if (action == actions[t-1])                { w[i] += params.straight_reward; }
                     else if (action == relaction(actions[t-1], 1))  { w[i] += params.diagf_reward; }
@@ -284,7 +349,6 @@ struct Planner {
             return random_action();
         }
         return relaction(prev_action, randrel());
-
     }
 
     void breed(Actions& res1, Actions& res2, const Actions a, const Actions b, const double mutation) const {
@@ -321,9 +385,9 @@ struct Planner {
         auto w0 = 1.0 / N;
         double u = urand() * w0;
 
-        std::size_t j = 0;
+        int j = 0;
         for (unsigned i = 0; i < N; ++i) {
-            while (cdf[j] < u) { ++j; }
+            while (cdf[j] < u && j < w.size()) { ++j; }
             samples[i] = j;
             u += w0;
         }
@@ -350,6 +414,7 @@ struct Planner {
     void get_path(const unsigned i, Path& path) const {
         path.resize(2, T + 1);
         path.col(0) = start;
+        assert(i < population.size());
         for (unsigned t = 0; t < T; ++t) {
             path.col(t + 1) = path.col(t) + moves.array().col(population[i][t]);
         }
@@ -362,14 +427,14 @@ auto& operator<<(std::ostream& os, const Planner::Actions& actions) {
     for (auto action : actions) {
         if (!first) { os << ","; } else { first = false; }
         switch (action) {
-            case 0: os << "E"; break;
-            case 1: os << "NE"; break;
-            case 2: os << "N"; break;
-            case 3: os << "NW"; break;
-            case 4: os << "W"; break;
-            case 5: os << "SW"; break;
-            case 6: os << "S"; break;
-            case 7: os << "SE"; break;
+            case E: os << "E"; break;
+            case NE: os << "NE"; break;
+            case N: os << "N"; break;
+            case NW: os << "NW"; break;
+            case W: os << "W"; break;
+            case SW: os << "SW"; break;
+            case S: os << "S"; break;
+            case SE: os << "SE"; break;
         }
     }
     os << "}";

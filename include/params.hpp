@@ -12,6 +12,6 @@ struct Params {
     double score_power = 2;
     double pD = 0.99;
     int memory = 1e9;
-    unsigned leapsize = 5;
+    unsigned pathgen = 3;
 };
 }

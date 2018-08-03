@@ -16,12 +16,12 @@ class Application:
         """Convert ppl path to world coordinates."""
         dpath = np.empty(path.shape)
         for t in range(path.shape[1]):
-            dpath[:, t] = path[:, t] * gridsize + corner
+            dpath[:, t] = (path[:, t] * gridsize + corner).astype(np.int)
         return dpath
 
 
-    def observe(self, phds, paths, params):
-        """Reduce the phds based on observations."""
+    def observe(self, phd, paths, params):
+        """Reduce the phd based on observations."""
         for path in paths:
             for t in range(path.shape[1]):
-                phds[0 if len(phds) == 1 else t][path[0, t], path[1, t]] *= params.pD
+                phd[path[0, t], path[1, t]] *= 1 - params.pD

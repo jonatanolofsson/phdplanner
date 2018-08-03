@@ -16,6 +16,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import phdplanner as ppl
+import lmb
 
 import lmb
 from aniceday import gprdata
@@ -27,12 +28,13 @@ THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 @asyncinit
-class PhdPlot(lmb.Application):
+class PhdPlot(ppl.Application, lmb.Application):
     """Main application."""
 
     async def __init__(self):
         """Init."""
-        super().__init__()
+        ppl.Application.__init__(self)
+        lmb.Application.__init__(self)
 
         # Tracker settings
         self.model = lmb.CV(0.5, 1e0)
@@ -49,6 +51,7 @@ class PhdPlot(lmb.Application):
         self.unknown = 0.02
 
         self.nof_scans = 3
+        self.tparams = lmb.Params()
         self.tparams.r_lim = 0.1
         self.tparams.w_lim = 0.01;
         self.tparams.nhyp_max = 10;
@@ -60,11 +63,19 @@ class PhdPlot(lmb.Application):
 
 
         self.ppl_nofsteps = 600
-        self.ppl_population_size = lambda k: 100000
+        self.ppl_population_size = lambda k: 1000
         self.ppl_agents = [
             np.array([[10], [5]], dtype=np.int32),
             # np.array([[5], [30]], dtype=np.int32),
         ]
+        self.pplparams.value_factor = 2
+        self.pplparams.straight_reward = 0  # 5e-4
+        self.pplparams.diagf_reward = 0  # 1e-4
+        self.pplparams.side_reward = 0 #5e-5
+        self.pplparams.max_streak = 10
+        self.pplparams.streak_reward = 0
+        self.pplparams.score_power = 3
+        self.pplparams.pD = 0.99
 
     async def lambdaB(self, reports, fov):
         """lambdaB callback."""
@@ -72,9 +83,9 @@ class PhdPlot(lmb.Application):
             0.8 * (1.5 * len(reports) - (await self.enof_targets(fov.aabbox()))),
             0.05 * len(reports))
 
-    def plan(self, phds):
+    def plan(self, phd):
         """Make plans."""
-        observed_phds = deepcopy(phds)
+        observed_phd = deepcopy(phd)
         neregion = self.region.neaabbox(self.origin)
         gridsize = np.array([
             (neregion.max[0] - neregion.min[0]) / self.phdsize[0],
@@ -86,8 +97,8 @@ class PhdPlot(lmb.Application):
             start = np.floor((np.squeeze(nestart) - corner) / gridsize)
             n = self.ppl_population_size(0)
             planner = self.planners[agent_id] = \
-                ppl.Planner(observed_phds, self.pplparams, start, n, self.ppl_nofsteps)
-            self.observe(observed_phds, [planner.best_path()], self.pplparams)
+                ppl.Planner(observed_phd, self.pplparams, start, self.ppl_nofsteps, n)
+            self.observe(observed_phd, [planner.best_path()], self.pplparams)
             paths[agent_id] = []
             bweight = planner.w[planner.best_index]
             for i in range(min(n, floor(100 / len(self.ppl_agents)))):
@@ -155,12 +166,11 @@ class PhdPlot(lmb.Application):
             neregion = self.region.neaabbox(self.origin)
             extent = (neregion.min[1], neregion.max[1], neregion.min[0], neregion.max[0])
             phd = await self.sample_phd()
-            phds = [phd]
             plt.figure("phd")
             plt.clf()
             lmb.plot.scan(reports, self.origin)
             lmb.plot.phd(phd, extent=extent)
-            self.plan(phds)
+            self.plan(phd)
             plt.gcf().savefig(os.path.splitext(__file__)[0], bbox_inches='tight')
             last_time = time
 

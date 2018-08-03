@@ -29,18 +29,19 @@ PYBIND11_MODULE(phdplanner, m) {
         .def_readwrite("streak_reward", &Params::streak_reward)
         .def_readwrite("score_power", &Params::score_power)
         .def_readwrite("pD", &Params::pD)
-        .def_readwrite("memory", &Params::memory);
+        .def_readwrite("memory", &Params::memory)
+        .def_readwrite("pathgen", &Params::pathgen);
 
     using ppl::Planner;
     py::class_<Planner>(m, "Planner")
-        .def(py::init<typename Planner::PHDs,
+        .def(py::init<typename Planner::PHD,
                       Params,
                       typename Planner::Position,
                       unsigned,
                       unsigned,
                       uint8_t>(),
-             "phds"_a, "params"_a, "start"_a, "N"_a = 10000,
-             "T"_a = 0, "prior_action"_a = 8)
+             "phd"_a, "params"_a, "start"_a, "T"_a, "N"_a = 10000,
+             "prior_action"_a = 8)
         .def_readwrite("params", &Planner::params)
         .def_readonly("w", &Planner::w)
         .def("update_values", &Planner::update_values, "values"_a)
