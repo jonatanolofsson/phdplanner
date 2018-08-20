@@ -9,6 +9,7 @@
 #include <mutex>
 #include <queue>
 #include <string>
+#include <stdlib.h>
 #include "phdplanner.hpp"
 
 namespace py = pybind11;
@@ -19,6 +20,7 @@ struct HaltException : public std::exception {};
 
 PYBIND11_MODULE(phdplanner, m) {
     using ppl::Params;
+    m.def("srand", &std::srand);
     py::class_<Params>(m, "Params")
         .def(py::init<>())
         .def_readwrite("value_factor", &Params::value_factor)
