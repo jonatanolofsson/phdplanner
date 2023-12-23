@@ -15,8 +15,6 @@ from asyncinit import asyncinit
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import phdplanner as ppl
-import lmb
 
 import lmb
 from aniceday import gprdata
@@ -25,6 +23,11 @@ from aniceday import gprdata
 logging.basicConfig(level=logging.DEBUG)
 LOGGER = logging.getLogger(__name__)
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+PHD_DIR = os.path.dirname(THIS_DIR)
+sys.path.append(PHD_DIR)
+
+import phdplanner as ppl
+import lmb
 
 
 @asyncinit
